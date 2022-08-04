@@ -6,6 +6,7 @@ import numpy as np
 from dm_control import manipulation, suite
 from dm_control.suite.wrappers import action_scale, pixels
 from dm_env import StepType, specs
+from xland import CameraWrapper, GymWrapper, make_env
 
 import custom_dmc_tasks as cdmc
 
@@ -206,7 +207,10 @@ class ObservationDTypeWrapper(dm_env.Environment):
     def __init__(self, env, dtype):
         self._env = env
         self._dtype = dtype
-        wrapped_obs_spec = env.observation_spec()['observations']
+        if isinstance(env.observation_spec(), dict):
+            wrapped_obs_spec = env.observation_spec()['observations']
+        else:
+            wrapped_obs_spec = env.observation_spec()
         self._obs_spec = specs.Array(wrapped_obs_spec.shape, dtype,
                                      'observation')
 
@@ -233,8 +237,9 @@ class ObservationDTypeWrapper(dm_env.Environment):
 
 
 class ExtendedTimeStepWrapper(dm_env.Environment):
-    def __init__(self, env):
+    def __init__(self, env, discrete=False):
         self._env = env
+        self.discrete = discrete
 
     def reset(self):
         time_step = self._env.reset()
@@ -245,9 +250,18 @@ class ExtendedTimeStepWrapper(dm_env.Environment):
         return self._augment_time_step(time_step, action)
 
     def _augment_time_step(self, time_step, action=None):
-        if action is None:
-            action_spec = self.action_spec()
-            action = np.zeros(action_spec.shape, dtype=action_spec.dtype)
+        if self.discrete:
+            hot_encoded = np.zeros(self._env.action_spec().num_values)
+            if action is None:
+                hot_encoded[0] = 1
+            else:
+                hot_encoded[action] = 1
+            action = hot_encoded
+
+        else:
+            if action is None:
+                action_spec = self.action_spec()
+                action = np.zeros(action_spec.shape, dtype=action_spec.dtype)
         return ExtendedTimeStep(observation=time_step.observation,
                                 step_type=time_step.step_type,
                                 action=action,
@@ -299,19 +313,38 @@ def _make_dmc(obs_type, domain, task, frame_stack, action_repeat, seed):
     return env
 
 
+def _make_xland(obs_type, domain, task, frame_stack, action_repeat, seed):
+    visualize_reward = False
+    # Make xland env
+    example_map_01 = np.load("/home/alicia/github/url_benchmark/example_map_01.npy")
+    env = make_env("/home/alicia/github/simenv/integrations/Unity/builds/simenv_unity.x86_64", 
+                camera_width=84, camera_height=84, wrappers=[CameraWrapper, GymWrapper],
+                sample_from=example_map_01, width=4, height=4, predicate=None, headless=True,
+                n_show=1, n_maps=10)(port=55000 + np.random.randint(0, 5000))
+    env = ActionRepeatWrapper(env, action_repeat)
+    return env
+
+
+
 def make(name, obs_type, frame_stack, action_repeat, seed):
     assert obs_type in ['states', 'pixels']
     domain, task = name.split('_', 1)
     domain = dict(cup='ball_in_cup').get(domain, domain)
 
-    make_fn = _make_jaco if domain == 'jaco' else _make_dmc
+    if domain == 'jaco':
+        make_fn = _make_jaco
+    elif domain == 'xland':
+        make_fn = _make_xland
+    else:
+        make_fn = _make_dmc
+    
     env = make_fn(obs_type, domain, task, frame_stack, action_repeat, seed)
 
     if obs_type == 'pixels':
         env = FrameStackWrapper(env, frame_stack)
     else:
         env = ObservationDTypeWrapper(env, np.float32)
-
-    env = action_scale.Wrapper(env, minimum=-1.0, maximum=+1.0)
-    env = ExtendedTimeStepWrapper(env)
+    if domain != 'xland':
+        env = action_scale.Wrapper(env, minimum=-1.0, maximum=+1.0)
+    env = ExtendedTimeStepWrapper(env, discrete=domain == 'xland')
     return env

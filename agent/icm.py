@@ -9,21 +9,29 @@ from agent.ddpg import DDPGAgent
 
 
 class ICM(nn.Module):
-    def __init__(self, obs_dim, action_dim, hidden_dim):
+    def __init__(self, obs_dim, action_dim, hidden_dim, discrete=False):
         super().__init__()
 
         self.forward_net = nn.Sequential(
             nn.Linear(obs_dim + action_dim, hidden_dim), nn.ReLU(),
             nn.Linear(hidden_dim, obs_dim))
 
-        self.backward_net = nn.Sequential(nn.Linear(2 * obs_dim, hidden_dim),
+        if discrete:
+            self.backward_net = nn.Sequential(nn.Linear(2 * obs_dim, hidden_dim),
                                           nn.ReLU(),
-                                          nn.Linear(hidden_dim, action_dim),
-                                          nn.Tanh())
+                                          nn.Linear(hidden_dim, action_dim))
+        else:
+            self.backward_net = nn.Sequential(nn.Linear(2 * obs_dim, hidden_dim),
+                                            nn.ReLU(),
+                                            nn.Linear(hidden_dim, action_dim),
+                                            nn.Tanh())
 
         self.apply(utils.weight_init)
 
     def forward(self, obs, action, next_obs):
+        if discrete:
+            action = one_hot()
+
         assert obs.shape[0] == next_obs.shape[0]
         assert obs.shape[0] == action.shape[0]
 
@@ -34,22 +42,27 @@ class ICM(nn.Module):
                                    dim=-1,
                                    p=2,
                                    keepdim=True)
-        backward_error = torch.norm(action - action_hat,
-                                    dim=-1,
-                                    p=2,
-                                    keepdim=True)
+        
+        if discrete:
+            backward_error = nn.CrossEntropyLoss()(action_hat, action)
+        else:
+            backward_error = torch.norm(action - action_hat,
+                                        dim=-1,
+                                        p=2,
+                                        keepdim=True)
 
         return forward_error, backward_error
 
 
 class ICMAgent(DDPGAgent):
-    def __init__(self, icm_scale, update_encoder, **kwargs):
+    def __init__(self, icm_scale, update_encoder, discrete=False, **kwargs):
         super().__init__(**kwargs)
         self.icm_scale = icm_scale
         self.update_encoder = update_encoder
+        self.discrete = discrete
 
         self.icm = ICM(self.obs_dim, self.action_dim,
-                       self.hidden_dim).to(self.device)
+                       self.hidden_dim, discrete=discrete).to(self.device)
 
         # optimizers
         self.icm_opt = torch.optim.Adam(self.icm.parameters(), lr=self.lr)

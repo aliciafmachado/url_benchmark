@@ -26,10 +26,27 @@ torch.backends.cudnn.benchmark = True
 from dmc_benchmark import PRIMAL_TASKS
 
 
+def softmax(x):
+    """Compute softmax values for each sets of scores in x."""
+    return np.exp(x) / np.sum(np.exp(x), axis=0)
+
+def apply_softmax(action, greedy=False):
+    policy = softmax(action)
+    if greedy:
+        action = np.argmax(policy)
+    else:
+        action = np.random.choice(np.arange(len(policy)), p=policy)
+    return action
+
+
 def make_agent(obs_type, obs_spec, action_spec, num_expl_steps, cfg):
     cfg.obs_type = obs_type
     cfg.obs_shape = obs_spec.shape
-    cfg.action_shape = action_spec.shape
+    if len(action_spec.shape) == 0:
+        cfg.action_shape = (action_spec.num_values,)
+        cfg.discrete = True
+    else:
+        cfg.action_shape = action_spec.shape
     cfg.num_expl_steps = num_expl_steps
     return hydra.utils.instantiate(cfg)
 
@@ -133,6 +150,8 @@ class Workspace:
                                             meta,
                                             self.global_step,
                                             eval_mode=True)
+                if self.agent.discrete:
+                    action = apply_softmax(action, greedy=True)
                 time_step = self.eval_env.step(action)
                 self.video_recorder.record(self.eval_env)
                 total_reward += time_step.reward
@@ -205,6 +224,8 @@ class Workspace:
                                         meta,
                                         self.global_step,
                                         eval_mode=False)
+                if self.agent.discrete:
+                    action = apply_softmax(action, greedy=False)
 
             # try to update the agent
             if not seed_until_step(self.global_step):
@@ -212,6 +233,7 @@ class Workspace:
                 self.logger.log_metrics(metrics, self.global_frame, ty='train')
 
             # take env step
+            # for now discrete envs will have their actions saved as one hot encodings
             time_step = self.train_env.step(action)
             episode_reward += time_step.reward
             self.replay_storage.add(time_step, meta)
