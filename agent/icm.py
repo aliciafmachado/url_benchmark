@@ -25,12 +25,12 @@ class ICM(nn.Module):
                                             nn.ReLU(),
                                             nn.Linear(hidden_dim, action_dim),
                                             nn.Tanh())
-
+        
+        self.discrete = discrete
+        print("Discrete: ", discrete)
         self.apply(utils.weight_init)
 
     def forward(self, obs, action, next_obs):
-        if discrete:
-            action = one_hot()
 
         assert obs.shape[0] == next_obs.shape[0]
         assert obs.shape[0] == action.shape[0]
@@ -43,7 +43,7 @@ class ICM(nn.Module):
                                    p=2,
                                    keepdim=True)
         
-        if discrete:
+        if self.discrete:
             backward_error = nn.CrossEntropyLoss()(action_hat, action)
         else:
             backward_error = torch.norm(action - action_hat,

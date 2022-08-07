@@ -241,6 +241,13 @@ class ExtendedTimeStepWrapper(dm_env.Environment):
     def __init__(self, env, discrete=False):
         self._env = env
         self.discrete = discrete
+        if discrete:
+            num_values = self._env.action_spec().num_values
+            self._action_spec = specs.BoundedArray((num_values,),
+                                               np.float32,
+                                               0.,
+                                               1.,
+                                               'action')
 
     def reset(self):
         time_step = self._env.reset()
@@ -251,8 +258,10 @@ class ExtendedTimeStepWrapper(dm_env.Environment):
         return self._augment_time_step(time_step, action)
 
     def _augment_time_step(self, time_step, action=None):
+        action_spec = self.action_spec()
+
         if self.discrete:
-            hot_encoded = np.zeros(self._env.action_spec().num_values)
+            hot_encoded = np.zeros(action_spec.shape, dtype=action_spec.dtype)
             if action is None:
                 hot_encoded[0] = 1
             else:
@@ -261,7 +270,6 @@ class ExtendedTimeStepWrapper(dm_env.Environment):
 
         else:
             if action is None:
-                action_spec = self.action_spec()
                 action = np.zeros(action_spec.shape, dtype=action_spec.dtype)
         return ExtendedTimeStep(observation=time_step.observation,
                                 step_type=time_step.step_type,
@@ -273,6 +281,8 @@ class ExtendedTimeStepWrapper(dm_env.Environment):
         return self._env.observation_spec()
 
     def action_spec(self):
+        if self.discrete:
+            return self._action_spec
         return self._env.action_spec()
 
     def __getattr__(self, name):
@@ -319,8 +329,8 @@ def _make_dmc(obs_type, domain, task, frame_stack, action_repeat, seed):
 def _make_xland(obs_type, domain, task, frame_stack, action_repeat, seed):
     visualize_reward = False
     # Make xland env
-    example_map_01 = np.load("/home/alicia_huggingface_co/github/url_benchmark/example_map_01.npy")
-    env = make_env("/home/alicia_huggingface_co/github/simenv/integrations/Unity/simenv-unity/Build/executable.x86_64", 
+    example_map_01 = np.load("/home/alicia/github/url_benchmark/example_map_01.npy")
+    env = make_env("/home/alicia/github/simenv/integrations/Unity/simenv-unity/Build/executable.x86_64", 
                 camera_width=84, camera_height=84, wrappers=[CameraWrapper, GymWrapper],
                 sample_from=example_map_01, width=4, height=4, predicate=None, headless=True,
                 n_show=1, n_maps=10)(port=55000 + np.random.randint(0, 5000))
