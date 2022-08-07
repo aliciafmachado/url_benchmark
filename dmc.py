@@ -3,12 +3,13 @@ from typing import Any, NamedTuple
 
 import dm_env
 import numpy as np
-from dm_control import manipulation, suite
-from dm_control.suite.wrappers import action_scale, pixels
+# from dm_control import manipulation, suite
+# from dm_control.suite.wrappers import action_scale, pixels
 from dm_env import StepType, specs
-from xland import CameraWrapper, GymWrapper, make_env
+from xland.wrappers import CameraWrapper, GymWrapper
+from xland import make_env
 
-import custom_dmc_tasks as cdmc
+# import custom_dmc_tasks as cdmc
 
 
 class ExtendedTimeStep(NamedTuple):
@@ -279,45 +280,47 @@ class ExtendedTimeStepWrapper(dm_env.Environment):
 
 
 def _make_jaco(obs_type, domain, task, frame_stack, action_repeat, seed):
-    env = cdmc.make_jaco(task, obs_type, seed)
-    env = ActionDTypeWrapper(env, np.float32)
-    env = ActionRepeatWrapper(env, action_repeat)
-    env = FlattenJacoObservationWrapper(env)
-    return env
+    # env = cdmc.make_jaco(task, obs_type, seed)
+    # env = ActionDTypeWrapper(env, np.float32)
+    # env = ActionRepeatWrapper(env, action_repeat)
+    # env = FlattenJacoObservationWrapper(env)
+    # return env
+    return None
 
 
 def _make_dmc(obs_type, domain, task, frame_stack, action_repeat, seed):
-    visualize_reward = False
-    if (domain, task) in suite.ALL_TASKS:
-        env = suite.load(domain,
-                         task,
-                         task_kwargs=dict(random=seed),
-                         environment_kwargs=dict(flat_observation=True),
-                         visualize_reward=visualize_reward)
-    else:
-        env = cdmc.make(domain,
-                        task,
-                        task_kwargs=dict(random=seed),
-                        environment_kwargs=dict(flat_observation=True),
-                        visualize_reward=visualize_reward)
+#     visualize_reward = False
+#     if (domain, task) in suite.ALL_TASKS:
+#         env = suite.load(domain,
+#                          task,
+#                          task_kwargs=dict(random=seed),
+#                          environment_kwargs=dict(flat_observation=True),
+#                          visualize_reward=visualize_reward)
+#     else:
+#         env = cdmc.make(domain,
+#                         task,
+#                         task_kwargs=dict(random=seed),
+#                         environment_kwargs=dict(flat_observation=True),
+#                         visualize_reward=visualize_reward)
 
-    env = ActionDTypeWrapper(env, np.float32)
-    env = ActionRepeatWrapper(env, action_repeat)
-    if obs_type == 'pixels':
-        # zoom in camera for quadruped
-        camera_id = dict(quadruped=2).get(domain, 0)
-        render_kwargs = dict(height=84, width=84, camera_id=camera_id)
-        env = pixels.Wrapper(env,
-                             pixels_only=True,
-                             render_kwargs=render_kwargs)
-    return env
+#     env = ActionDTypeWrapper(env, np.float32)
+#     env = ActionRepeatWrapper(env, action_repeat)
+#     if obs_type == 'pixels':
+#         # zoom in camera for quadruped
+#         camera_id = dict(quadruped=2).get(domain, 0)
+#         render_kwargs = dict(height=84, width=84, camera_id=camera_id)
+#         env = pixels.Wrapper(env,
+#                              pixels_only=True,
+#                              render_kwargs=render_kwargs)
+#     return env
+    return None
 
 
 def _make_xland(obs_type, domain, task, frame_stack, action_repeat, seed):
     visualize_reward = False
     # Make xland env
-    example_map_01 = np.load("/home/alicia/github/url_benchmark/example_map_01.npy")
-    env = make_env("/home/alicia/github/simenv/integrations/Unity/builds/simenv_unity.x86_64", 
+    example_map_01 = np.load("/home/alicia_huggingface_co/github/url_benchmark/example_map_01.npy")
+    env = make_env("/home/alicia_huggingface_co/github/simenv/integrations/Unity/simenv-unity/Build/executable.x86_64", 
                 camera_width=84, camera_height=84, wrappers=[CameraWrapper, GymWrapper],
                 sample_from=example_map_01, width=4, height=4, predicate=None, headless=True,
                 n_show=1, n_maps=10)(port=55000 + np.random.randint(0, 5000))
@@ -344,7 +347,7 @@ def make(name, obs_type, frame_stack, action_repeat, seed):
         env = FrameStackWrapper(env, frame_stack)
     else:
         env = ObservationDTypeWrapper(env, np.float32)
-    if domain != 'xland':
-        env = action_scale.Wrapper(env, minimum=-1.0, maximum=+1.0)
+    # if domain != 'xland':
+    #     env = action_scale.Wrapper(env, minimum=-1.0, maximum=+1.0)
     env = ExtendedTimeStepWrapper(env, discrete=domain == 'xland')
     return env
