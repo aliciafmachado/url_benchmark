@@ -32,63 +32,63 @@ class ExtendedTimeStep(NamedTuple):
         return getattr(self, attr)
 
 
-class FlattenJacoObservationWrapper(dm_env.Environment):
-    def __init__(self, env):
-        self._env = env
-        self._obs_spec = OrderedDict()
-        wrapped_obs_spec = env.observation_spec().copy()
-        if 'front_close' in wrapped_obs_spec:
-            spec = wrapped_obs_spec['front_close']
-            # drop batch dim
-            self._obs_spec['pixels'] = specs.BoundedArray(shape=spec.shape[1:],
-                                                          dtype=spec.dtype,
-                                                          minimum=spec.minimum,
-                                                          maximum=spec.maximum,
-                                                          name='pixels')
-            wrapped_obs_spec.pop('front_close')
+# class FlattenJacoObservationWrapper(dm_env.Environment):
+#     def __init__(self, env):
+#         self._env = env
+#         self._obs_spec = OrderedDict()
+#         wrapped_obs_spec = env.observation_spec().copy()
+#         if 'front_close' in wrapped_obs_spec:
+#             spec = wrapped_obs_spec['front_close']
+#             # drop batch dim
+#             self._obs_spec['pixels'] = specs.BoundedArray(shape=spec.shape[1:],
+#                                                           dtype=spec.dtype,
+#                                                           minimum=spec.minimum,
+#                                                           maximum=spec.maximum,
+#                                                           name='pixels')
+#             wrapped_obs_spec.pop('front_close')
 
-        for key, spec in wrapped_obs_spec.items():
-            assert spec.dtype == np.float64
-            assert type(spec) == specs.Array
-        dim = np.sum(
-            np.fromiter((np.int(np.prod(spec.shape))
-                         for spec in wrapped_obs_spec.values()), np.int32))
+#         for key, spec in wrapped_obs_spec.items():
+#             assert spec.dtype == np.float64
+#             assert type(spec) == specs.Array
+#         dim = np.sum(
+#             np.fromiter((np.int(np.prod(spec.shape))
+#                          for spec in wrapped_obs_spec.values()), np.int32))
 
-        self._obs_spec['observations'] = specs.Array(shape=(dim,),
-                                                     dtype=np.float32,
-                                                     name='observations')
+#         self._obs_spec['observations'] = specs.Array(shape=(dim,),
+#                                                      dtype=np.float32,
+#                                                      name='observations')
 
-    def _transform_observation(self, time_step):
-        obs = OrderedDict()
+#     def _transform_observation(self, time_step):
+#         obs = OrderedDict()
 
-        if 'front_close' in time_step.observation:
-            pixels = time_step.observation['front_close']
-            time_step.observation.pop('front_close')
-            pixels = np.squeeze(pixels)
-            obs['pixels'] = pixels
+#         if 'front_close' in time_step.observation:
+#             pixels = time_step.observation['front_close']
+#             time_step.observation.pop('front_close')
+#             pixels = np.squeeze(pixels)
+#             obs['pixels'] = pixels
 
-        features = []
-        for feature in time_step.observation.values():
-            features.append(feature.ravel())
-        obs['observations'] = np.concatenate(features, axis=0)
-        return time_step._replace(observation=obs)
+#         features = []
+#         for feature in time_step.observation.values():
+#             features.append(feature.ravel())
+#         obs['observations'] = np.concatenate(features, axis=0)
+#         return time_step._replace(observation=obs)
 
-    def reset(self):
-        time_step = self._env.reset()
-        return self._transform_observation(time_step)
+#     def reset(self):
+#         time_step = self._env.reset()
+#         return self._transform_observation(time_step)
 
-    def step(self, action):
-        time_step = self._env.step(action)
-        return self._transform_observation(time_step)
+#     def step(self, action):
+#         time_step = self._env.step(action)
+#         return self._transform_observation(time_step)
 
-    def observation_spec(self):
-        return self._obs_spec
+#     def observation_spec(self):
+#         return self._obs_spec
 
-    def action_spec(self):
-        return self._env.action_spec()
+#     def action_spec(self):
+#         return self._env.action_spec()
 
-    def __getattr__(self, name):
-        return getattr(self._env, name)
+#     def __getattr__(self, name):
+#         return getattr(self._env, name)
 
 
 class ActionRepeatWrapper(dm_env.Environment):
